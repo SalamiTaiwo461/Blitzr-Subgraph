@@ -120,6 +120,7 @@ dataSources:
         - BondingTrade
         - Migration
         - Protocol
+        - TokenCandle
       abis:
         - name: BlitzrBondingCurveArc
           file: ./abis/BlitzrBondingCurveArc.json
@@ -162,6 +163,7 @@ templates:
         - Swap
         - LiquidityEvent
         - PoolDayData
+        - TokenCandle
       abis:
         - name: UniswapV3Pool
           file: ./abis/UniswapV3Pool.json
@@ -191,6 +193,7 @@ templates:
         - Swap
         - LiquidityEvent
         - PoolDayData
+        - TokenCandle
       abis:
         - name: UniswapV2Pair
           file: ./abis/UniswapV2Pair.json

@@ -5,6 +5,7 @@ import { getDecimals } from "./utils/token-meta";
 import { reservesToTokenPrices } from "./utils/pricing";
 import { getOrCreatePoolDayData } from "./utils/day-data";
 import { getOrCreateProtocol } from "./utils/protocol";
+import { updateTokenCandles } from "./utils/candles";
 import { bytesFromAddress, ONE_BI, convertTokenToDecimal } from "./utils/constants";
 
 // V2 has no in-pool concept of "current tick/liquidity" the way V3 does — reserve0/reserve1
@@ -41,13 +42,11 @@ export function handleSwap(event: Swap): void {
 
   let token0Decimals = getDecimals(Address.fromBytes(pool.token0));
   let token1Decimals = getDecimals(Address.fromBytes(pool.token1));
+  let volume0Decimal = convertTokenToDecimal(amount0.abs(), token0Decimals);
+  let volume1Decimal = convertTokenToDecimal(amount1.abs(), token1Decimals);
 
-  pool.volumeToken0 = pool.volumeToken0.plus(
-    convertTokenToDecimal(amount0.abs(), token0Decimals)
-  );
-  pool.volumeToken1 = pool.volumeToken1.plus(
-    convertTokenToDecimal(amount1.abs(), token1Decimals)
-  );
+  pool.volumeToken0 = pool.volumeToken0.plus(volume0Decimal);
+  pool.volumeToken1 = pool.volumeToken1.plus(volume1Decimal);
   pool.txCount = pool.txCount.plus(ONE_BI);
   pool.save();
 
@@ -68,16 +67,21 @@ export function handleSwap(event: Swap): void {
   let dayData = getOrCreatePoolDayData(pool as Pool, event.block.timestamp);
   dayData.token0Price = pool.token0Price;
   dayData.token1Price = pool.token1Price;
-  dayData.volumeToken0 = dayData.volumeToken0.plus(
-    convertTokenToDecimal(amount0.abs(), token0Decimals)
-  );
-  dayData.volumeToken1 = dayData.volumeToken1.plus(
-    convertTokenToDecimal(amount1.abs(), token1Decimals)
-  );
+  dayData.volumeToken0 = dayData.volumeToken0.plus(volume0Decimal);
+  dayData.volumeToken1 = dayData.volumeToken1.plus(volume1Decimal);
   dayData.txCount = dayData.txCount.plus(ONE_BI);
   dayData.reserve0 = pool.reserve0;
   dayData.reserve1 = pool.reserve1;
   dayData.save();
+
+  // Candle price/volume are expressed in "launched token" / "quote token" terms regardless of
+  // which side ended up as token0/token1 for this particular pair — see TokenCandle in
+  // schema.graphql. pool.token0Price/token1Price already reflect the post-swap reserves, since
+  // Sync always fires before Swap within the same V2 transaction.
+  let candlePrice = pool.launchedTokenIsToken0 ? pool.token0Price : pool.token1Price;
+  let candleVolumeToken = pool.launchedTokenIsToken0 ? volume0Decimal : volume1Decimal;
+  let candleVolumeQuote = pool.launchedTokenIsToken0 ? volume1Decimal : volume0Decimal;
+  updateTokenCandles(pool.token, event.block.timestamp, candlePrice, candleVolumeToken, candleVolumeQuote);
 
   let protocol = getOrCreateProtocol();
   protocol.totalDexSwaps = protocol.totalDexSwaps.plus(ONE_BI);

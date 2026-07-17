@@ -9,6 +9,7 @@ import { getDecimals } from "./utils/token-meta";
 import { sqrtPriceX96ToTokenPrices } from "./utils/pricing";
 import { getOrCreatePoolDayData } from "./utils/day-data";
 import { getOrCreateProtocol } from "./utils/protocol";
+import { updateTokenCandles } from "./utils/candles";
 import { bytesFromAddress, ONE_BI, convertTokenToDecimal } from "./utils/constants";
 import { Address, BigInt } from "@graphprotocol/graph-ts";
 
@@ -44,8 +45,10 @@ export function handleSwap(event: Swap): void {
 
   let amount0Abs = event.params.amount0.abs();
   let amount1Abs = event.params.amount1.abs();
-  pool.volumeToken0 = pool.volumeToken0.plus(convertTokenToDecimal(amount0Abs, token0Decimals));
-  pool.volumeToken1 = pool.volumeToken1.plus(convertTokenToDecimal(amount1Abs, token1Decimals));
+  let volume0Decimal = convertTokenToDecimal(amount0Abs, token0Decimals);
+  let volume1Decimal = convertTokenToDecimal(amount1Abs, token1Decimals);
+  pool.volumeToken0 = pool.volumeToken0.plus(volume0Decimal);
+  pool.volumeToken1 = pool.volumeToken1.plus(volume1Decimal);
   pool.txCount = pool.txCount.plus(ONE_BI);
   pool.save();
 
@@ -69,11 +72,19 @@ export function handleSwap(event: Swap): void {
   let dayData = getOrCreatePoolDayData(pool as Pool, event.block.timestamp);
   dayData.token0Price = pool.token0Price;
   dayData.token1Price = pool.token1Price;
-  dayData.volumeToken0 = dayData.volumeToken0.plus(convertTokenToDecimal(amount0Abs, token0Decimals));
-  dayData.volumeToken1 = dayData.volumeToken1.plus(convertTokenToDecimal(amount1Abs, token1Decimals));
+  dayData.volumeToken0 = dayData.volumeToken0.plus(volume0Decimal);
+  dayData.volumeToken1 = dayData.volumeToken1.plus(volume1Decimal);
   dayData.txCount = dayData.txCount.plus(ONE_BI);
   dayData.liquidity = pool.liquidity;
   dayData.save();
+
+  // Candle price/volume are expressed in "launched token" / "quote token" terms regardless of
+  // which side ended up as token0/token1 for this particular pool — see TokenCandle in
+  // schema.graphql.
+  let candlePrice = pool.launchedTokenIsToken0 ? pool.token0Price : pool.token1Price;
+  let candleVolumeToken = pool.launchedTokenIsToken0 ? volume0Decimal : volume1Decimal;
+  let candleVolumeQuote = pool.launchedTokenIsToken0 ? volume1Decimal : volume0Decimal;
+  updateTokenCandles(pool.token, event.block.timestamp, candlePrice, candleVolumeToken, candleVolumeQuote);
 
   let protocol = getOrCreateProtocol();
   protocol.totalDexSwaps = protocol.totalDexSwaps.plus(ONE_BI);

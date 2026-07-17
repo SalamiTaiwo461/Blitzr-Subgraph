@@ -14,6 +14,7 @@ import { Token, BondingCurve, BondingTrade, Migration, TaxTokenInfo } from "../g
 import { fetchTokenMeta } from "./utils/token-meta";
 import { createV3Pool, createV2Pool } from "./utils/pool-factory";
 import { getOrCreateProtocol } from "./utils/protocol";
+import { updateTokenCandles } from "./utils/candles";
 import {
   bytesFromAddress,
   ZERO_BI,
@@ -68,6 +69,11 @@ export function handleTokenRegistered(event: TokenRegistered): void {
   token.totalSupply = event.params.totalSupply;
   token.creator = bytesFromAddress(event.params.creator);
   token.metaURI = meta.metaURI;
+  // Bonding-curve tokens always raise in native ARC_USDC directly (see BONDING_CURVE.md "Arc
+  // Variant"), both pre-migration (the curve itself) and post-migration (the DEX pool this
+  // stack creates is always paired against ARC_USDC — see createV3Pool/createV2Pool calls
+  // below), so this is a fixed constant here rather than something read off an event.
+  token.quoteToken = bytesFromAddress(ARC_USDC);
   token.exemptCount = 0;
   token.createdAtBlock = event.block.number;
   token.createdAtTimestamp = event.block.timestamp;
@@ -205,6 +211,8 @@ export function handleTokenBought(event: TokenBought): void {
   trade.logIndex = event.logIndex;
   trade.save();
 
+  updateTokenCandles(tokenId, event.block.timestamp, trade.priceUSDCPerToken, tokenDecimal, usdcDecimal);
+
   let protocol = getOrCreateProtocol();
   protocol.totalBondingTrades = protocol.totalBondingTrades.plus(ONE_BI);
   protocol.save();
@@ -239,6 +247,8 @@ export function handleTokenSold(event: TokenSold): void {
   trade.tx = event.transaction.hash;
   trade.logIndex = event.logIndex;
   trade.save();
+
+  updateTokenCandles(tokenId, event.block.timestamp, trade.priceUSDCPerToken, tokenDecimal, usdcDecimal);
 
   let protocol = getOrCreateProtocol();
   protocol.totalBondingTrades = protocol.totalBondingTrades.plus(ONE_BI);

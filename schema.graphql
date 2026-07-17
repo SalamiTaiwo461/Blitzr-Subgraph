@@ -7,8 +7,10 @@ fixed address 0x3600000000000000000000000000000000000000) — there is no WETH o
 Two parallel launch stacks feed into real DEX pools/pairs on Arc:
   - BlitzrLauncherArc     (contracts/BlitzrLauncherArc.sol)      -> V3 pool, one-sided, locked in BlitzrLocker
   - BlitzrBondingCurveArc (bonding-curve/BlitzrBondingCurveArc.sol) -> internal curve, migrates to:
-      - BlitzrStandardToken -> V3 pool, locked in BlitzrLocker (a *separate* BlitzrLocker instance)
+      - BlitzrStandardToken -> V3 pool, locked in BlitzrLocker
       - BlitzrTaxTokenArc   -> V2 pair, LP burned
+Both stacks' locked positions are typically held by the *same* BlitzrLocker instance —
+launchers is an allowlist, not a single address — see LauncherAuthorization below.
 """
 
 enum LaunchStack {
@@ -30,6 +32,18 @@ enum TradeSide {
 enum LiquiditySide {
   MINT
   BURN
+}
+
+# Mirrors TradingView's standard resolution menu (1/5/15/60/240/"1D") so a chart (e.g.
+# Lightweight Charts) can consume a bucket directly with no client-side resampling — see README
+# "Chart data".
+enum CandleInterval {
+  MINUTE_1
+  MINUTE_5
+  MINUTE_15
+  HOUR_1
+  HOUR_4
+  DAY_1
 }
 
 """
@@ -89,6 +103,32 @@ type Token @entity {
 
   ctoEvents: [CtoTransfer!]! @derivedFrom(field: "token")
   ctoApplications: [CtoApplication!]! @derivedFrom(field: "token")
+  candles: [TokenCandle!]! @derivedFrom(field: "token")
+}
+
+"""
+OHLC price candle for a single Token, continuous across its whole lifecycle — bonding-curve
+trading pre-migration and DEX pool trading post-migration feed the *same* candle series (for
+BONDING_STANDARD/BONDING_TAX tokens both legs are always priced in ARC_USDC, see
+BlitzrBondingCurveArc's pair-creation logic, so there's no unit break across migration).
+BLITZR_V3 tokens are priced in whatever quote token that launch registered (see Token.quoteToken)
+— never converted to USDC, since the protocol has no price oracle on Arc by design.
+id = "<token>-<interval>-<periodStartUnix>".
+"""
+type TokenCandle @entity {
+  id: Bytes!
+  token: Token!
+  interval: CandleInterval!
+  periodStart: BigInt!
+  open: BigDecimal!
+  high: BigDecimal!
+  low: BigDecimal!
+  close: BigDecimal!
+  # Volume within this candle only, in the launched token's own units and in Token.quoteToken's
+  # units respectively (both decimal-normalized).
+  volumeToken: BigDecimal!
+  volumeQuote: BigDecimal!
+  trades: BigInt!
 }
 
 """

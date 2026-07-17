@@ -34,6 +34,8 @@ Arc variant (`raisedUSDC`, `virtualUSDC`, ...), and this subgraph's schema follo
   and `BlitzrBondingCurveArc`'s pre-migration pool creation, both documented in the core repo).
 - **Bonding-curve trading** — every `buy`/`sell` against the internal constant-product curve,
   plus migration (`migrate`/`emergencyMigrate`) and stalled-migration (`MigrationFailed`) state.
+- **Chart data** — `TokenCandle`: multi-resolution OHLCV, continuous across migration — see
+  "Chart data" below.
 - **Fee lifecycle** — `BlitzrLocker`'s locked-LP fee claims/burns, CTO (fee-wallet reassignment)
   flow, and its launcher allowlist (`LauncherAuthorization`) — see "Locker instance(s)" below.
 - **Tax/reflection mechanics** — `BlitzrTaxTokenArc`'s swap-and-liquify and reflection
@@ -43,6 +45,26 @@ Deliberately **not** indexed: generic ERC-20 `Transfer`/holder tracking on launc
 any USD pricing (the protocol itself has no price oracle on Arc — see `BONDING_CURVE.md` →
 "Arc Variant" — so this subgraph doesn't invent one either; all volume/liquidity figures are in
 each pool's own token units).
+
+## Chart data
+
+`TokenCandle` (`schema.graphql`) is OHLCV data precomputed by the indexer at six resolutions
+(`MINUTE_1`, `MINUTE_5`, `MINUTE_15`, `HOUR_1`, `HOUR_4`, `DAY_1` — TradingView's usual menu),
+one series **per Token**, fed by `src/utils/candles.ts`'s `updateTokenCandles()` from both
+`BlitzrBondingCurveArc.TokenBought`/`TokenSold` (`src/bonding-curve-arc.ts`) and DEX pool/pair
+`Swap` (`src/v3-pool.ts`, `src/v2-pair.ts`). Each bucket's fields (`open`/`high`/`low`/`close` as
+`BigDecimal`, `periodStart` as a unix-second `BigInt`) map directly onto
+[TradingView Lightweight Charts](https://tradingview.github.io/lightweight-charts/)' candlestick
+series shape — query one `interval`, sort by `periodStart`, and pass the array straight to
+`series.setData()`; `volumeToken` maps the same way onto a histogram series. No REST/UDF
+Datafeed adapter is needed for Lightweight Charts (unlike the full Charting Library) — just query
+the subgraph directly.
+
+For `BONDING_STANDARD`/`BONDING_TAX` tokens the series is continuous straight through migration:
+pre-migration bonding-curve trades and post-migration DEX swaps are both always priced in
+ARC_USDC (see `BlitzrBondingCurveArc`'s pair-creation logic), so there's no unit break to stitch
+around. `BLITZR_V3` tokens are priced in whatever quote token that launch registered
+(`Token.quoteToken`) — never converted to USDC, per the "no invented pricing" rule above.
 
 ## Locker instance(s)
 
@@ -116,5 +138,5 @@ src/
   tax-token-arc.ts     BlitzrTaxTokenArc clones: swap-and-liquify, reflection
   v3-pool.ts           V3 pool template: Initialize/Swap/Mint/Burn
   v2-pair.ts           V2 pair template: Swap/Mint/Burn/Sync
-  utils/               constants, address sorting, pricing math, pool factory, day-data, protocol singleton
+  utils/               constants, address sorting, pricing math, pool factory, day-data, candles, protocol singleton
 ```
