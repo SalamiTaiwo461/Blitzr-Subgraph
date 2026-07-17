@@ -47,7 +47,10 @@
     "type": "event",
     "name": "LauncherSet",
     "anonymous": false,
-    "inputs": [{ "name": "launcher", "type": "address", "indexed": true }]
+    "inputs": [
+      { "name": "launcher", "type": "address", "indexed": true },
+      { "name": "enabled", "type": "bool", "indexed": false }
+    ]
   },
   {
     "type": "event",

@@ -1,10 +1,11 @@
-// Shared mapping for both BlitzrLocker instances (BlitzrLockerV3 and BlitzrLockerBondingCurve —
-// see subgraph.yaml). BlitzrLocker.launcher is a single address and cannot be shared between the
-// two stacks at once (BONDING_CURVE.md -> "Deployment Order"), so Arc runs two separate
-// instances of the identical contract. Handlers here are instance-agnostic: `event.address` is
-// recorded as the position's `locker`, and CTO events are attributed to a LaunchStack by loading
-// the linked Token and reading its own `stack` field, rather than hardcoding either locker's
-// address — see LockerPosition/CtoTransfer in schema.graphql.
+// Mapping for the BlitzrLocker data source (see subgraph.yaml). BlitzrLocker.launchers is an
+// allowlist (mapping(address => bool)), not a single address, so one locker instance is meant to
+// be shared across every stack (BlitzrLauncherArc, BlitzrBondingCurveArc) at once — see
+// BLITZR.md/BONDING_CURVE.md -> "Deployment Order". Handlers here are still instance-agnostic in
+// case a deployment runs separate locker instances instead: `event.address` is recorded as the
+// position's `locker`, and CTO events are attributed to a LaunchStack by loading the linked Token
+// and reading its own `stack` field, rather than hardcoding any locker's address — see
+// LockerPosition/CtoTransfer in schema.graphql.
 import {
   PositionRegistered,
   FeesClaimed,
@@ -12,8 +13,16 @@ import {
   BurnToggled,
   TokenCTO,
   CTOApplied,
-} from "../generated/BlitzrLockerV3/BlitzrLocker";
-import { LockerPosition, FeeClaim, CtoTransfer, CtoApplication, Token } from "../generated/schema";
+  LauncherSet,
+} from "../generated/BlitzrLocker/BlitzrLocker";
+import {
+  LockerPosition,
+  FeeClaim,
+  CtoTransfer,
+  CtoApplication,
+  LauncherAuthorization,
+  Token,
+} from "../generated/schema";
 import { bytesFromAddress, ZERO_BI } from "./utils/constants";
 
 export function handlePositionRegistered(event: PositionRegistered): void {
@@ -123,4 +132,19 @@ export function handleCTOApplied(event: CTOApplied): void {
   application.block = event.block.number;
   application.tx = event.transaction.hash;
   application.save();
+}
+
+export function handleLauncherSet(event: LauncherSet): void {
+  let id = event.address.concat(event.params.launcher);
+  let authorization = LauncherAuthorization.load(id);
+  if (authorization == null) {
+    authorization = new LauncherAuthorization(id);
+    authorization.locker = bytesFromAddress(event.address);
+    authorization.launcher = bytesFromAddress(event.params.launcher);
+  }
+  authorization.enabled = event.params.enabled;
+  authorization.updatedAtBlock = event.block.number;
+  authorization.updatedAtTimestamp = event.block.timestamp;
+  authorization.updatedAtTx = event.transaction.hash;
+  authorization.save();
 }

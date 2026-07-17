@@ -34,9 +34,8 @@ Arc variant (`raisedUSDC`, `virtualUSDC`, ...), and this subgraph's schema follo
   and `BlitzrBondingCurveArc`'s pre-migration pool creation, both documented in the core repo).
 - **Bonding-curve trading** — every `buy`/`sell` against the internal constant-product curve,
   plus migration (`migrate`/`emergencyMigrate`) and stalled-migration (`MigrationFailed`) state.
-- **Fee lifecycle** — `BlitzrLocker`'s locked-LP fee claims/burns and CTO (fee-wallet
-  reassignment) flow, for both the V3 stack and the bonding-curve stack (they run **separate**
-  `BlitzrLocker` instances — see "Two locker instances" below).
+- **Fee lifecycle** — `BlitzrLocker`'s locked-LP fee claims/burns, CTO (fee-wallet reassignment)
+  flow, and its launcher allowlist (`LauncherAuthorization`) — see "Locker instance(s)" below.
 - **Tax/reflection mechanics** — `BlitzrTaxTokenArc`'s swap-and-liquify and reflection
   distribution counters (no V3/V2 equivalent, so tracked directly off the token clone).
 
@@ -45,14 +44,21 @@ any USD pricing (the protocol itself has no price oracle on Arc — see `BONDING
 "Arc Variant" — so this subgraph doesn't invent one either; all volume/liquidity figures are in
 each pool's own token units).
 
-## Two locker instances
+## Locker instance(s)
 
-`BlitzrLocker.launcher` is a single address — it cannot serve both `BlitzrLauncherArc` and
-`BlitzrBondingCurveArc` at once (see the core repo's "Deployment Order" docs), so a real Arc
-deployment runs **two separate `BlitzrLocker` contracts**. `subgraph.yaml` declares both as
-independent data sources (`BlitzrLockerV3`, `BlitzrLockerBondingCurve`) sharing one mapping file
-(`src/locker.ts`); handlers never hardcode which instance is which — they read `event.address`
-for the `LockerPosition.locker` field and the linked `Token.stack` for CTO attribution.
+`BlitzrLocker.launchers` is an allowlist (`mapping(address => bool)`), not a single address, so
+**one `BlitzrLocker` instance is meant to be shared** across every stack — `BlitzrLauncherArc`
+and `BlitzrBondingCurveArc` are both authorized on it simultaneously via `setLauncher(addr,
+true)` (see the core repo's "Deployment Order" docs, updated when `launcher` was reworked into
+this allowlist). `subgraph.yaml` declares a single `BlitzrLocker` data source accordingly, and
+`LauncherSet` is indexed into a `LauncherAuthorization` entity so it's visible which launchers are
+currently authorized on it.
+
+If a real deployment instead runs separate locker instances per stack (still supported, just no
+longer required), duplicate the `BlitzrLocker` data source block in `subgraph.yaml` per instance
+— `src/locker.ts` is already instance-agnostic: it reads `event.address` for the
+`LockerPosition.locker` field and the linked `Token.stack` for CTO attribution, never a hardcoded
+locker address.
 
 ## Before deploying
 
@@ -60,9 +66,10 @@ Every contract address and `startBlock` in `subgraph.yaml` is a placeholder
 (`0x000...00N` / `0`) — **BlitzrDotFunCore has not been deployed to Arc yet as of writing**. Fill
 in:
 
-1. The four fixed-address data sources in `subgraph.yaml` (`BlitzrLauncherArc`,
-   `BlitzrLockerV3`, `BlitzrLockerBondingCurve`, `BlitzrBondingCurveArc`) with real deployed
-   addresses and their deployment block numbers.
+1. The three fixed-address data sources in `subgraph.yaml` (`BlitzrLauncherArc`, `BlitzrLocker`,
+   `BlitzrBondingCurveArc`) with real deployed addresses and their deployment block numbers —
+   plus a fourth `BlitzrLocker` data source block if the deployment ends up running two separate
+   locker instances after all (see "Locker instance(s)" above).
 2. `network: arc` in every data source/template — set to whatever network name your indexer
    (self-hosted `graph-node`, Subgraph Studio, etc.) registers Arc under.
 
@@ -104,7 +111,7 @@ subgraph.yaml         Data sources (fixed contracts) + templates (dynamic pools/
 abis/                 Hand-authored ABI fragments (events + view functions actually used)
 src/
   launcher-arc.ts      BlitzrLauncherArc: TokenLaunched, DEX/quote-token registry
-  locker.ts            BlitzrLocker (both instances): positions, fee claims, CTO
+  locker.ts            BlitzrLocker: positions, fee claims, CTO, launcher allowlist
   bonding-curve-arc.ts BlitzrBondingCurveArc: token creation, buy/sell, migration
   tax-token-arc.ts     BlitzrTaxTokenArc clones: swap-and-liquify, reflection
   v3-pool.ts           V3 pool template: Initialize/Swap/Mint/Burn

@@ -278,6 +278,22 @@ type TaxTokenInfo @entity {
 }
 
 """
+BlitzrLocker.launchers is an allowlist (mapping(address => bool)), not a single address — one
+locker instance can be, and by default is, shared across every launchpad stack at once
+(BlitzrLauncherArc and BlitzrBondingCurveArc both authorized simultaneously via setLauncher).
+id = "<lockerAddress>-<launcherAddress>".
+"""
+type LauncherAuthorization @entity {
+  id: Bytes!
+  locker: Bytes!
+  launcher: Bytes!
+  enabled: Boolean!
+  updatedAtBlock: BigInt!
+  updatedAtTimestamp: BigInt!
+  updatedAtTx: Bytes!
+}
+
+"""
 BLITZR_V3 and BONDING_STANDARD (post-migration): the permanently-locked LP-NFT position held by
 a BlitzrLocker instance, and the cumulative result of every claimFees() call against it.
 id = launched token address.
@@ -285,7 +301,7 @@ id = launched token address.
 type LockerPosition @entity {
   id: Bytes!
   token: Token!
-  locker: Bytes! # BlitzrLocker contract address for this position (V3 stack and bonding-curve stack use separate instances)
+  locker: Bytes! # BlitzrLocker contract address for this position — may be the same instance across every stack, see LauncherAuthorization
   tokenId: BigInt!
   feeWallet: Bytes!
   pool: Bytes!

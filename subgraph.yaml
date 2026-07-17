@@ -56,9 +56,16 @@ dataSources:
           handler: handleMarketCapRefSet
       file: ./src/launcher-arc.ts
 
-  # ── BlitzrLocker — V3-stack instance (locks BlitzrLauncherArc's LP positions) ───────────────
+  # ── BlitzrLocker — shared across every stack ────────────────────────────────────────────────
+  # BlitzrLocker.launchers is an allowlist (mapping(address => bool)), not a single address, so
+  # one locker instance is meant to be shared across BlitzrLauncherArc and BlitzrBondingCurveArc
+  # at once (both authorized via setLauncher(addr, true) — see BLITZR.md/BONDING_CURVE.md ->
+  # "Deployment Order"). If a real deployment instead runs separate locker instances per stack,
+  # duplicate this data source block per instance — the mapping is already instance-agnostic (it
+  # keys off event.address for the `locker` field and the linked Token's `stack` for CTO
+  # attribution, never a hardcoded address).
   - kind: ethereum/contract
-    name: BlitzrLockerV3
+    name: BlitzrLocker
     network: arc
     source:
       address: "0x0000000000000000000000000000000000000002"
@@ -73,6 +80,7 @@ dataSources:
         - FeeClaim
         - CtoTransfer
         - CtoApplication
+        - LauncherAuthorization
       abis:
         - name: BlitzrLocker
           file: ./abis/BlitzrLocker.json
@@ -89,46 +97,8 @@ dataSources:
           handler: handleTokenCTO
         - event: CTOApplied(indexed address,indexed address,address,uint256)
           handler: handleCTOApplied
-      file: ./src/locker.ts
-
-  # ── BlitzrLocker — bonding-curve-stack instance (locks BlitzrStandardToken migrations) ──────
-  # Same contract type as BlitzrLockerV3 above, deployed as a SEPARATE instance — BlitzrLocker's
-  # `launcher` is a single address and cannot be shared between the two stacks at once (see
-  # BONDING_CURVE.md -> "Deployment Order"). Reuses the identical mapping file; handlers key off
-  # event.address for the `locker` field and off the linked Token's `stack` for CTO attribution,
-  # so no stack-specific branching is hardcoded here.
-  - kind: ethereum/contract
-    name: BlitzrLockerBondingCurve
-    network: arc
-    source:
-      address: "0x0000000000000000000000000000000000000003"
-      abi: BlitzrLocker
-      startBlock: 0
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.9
-      language: wasm/assemblyscript
-      entities:
-        - LockerPosition
-        - FeeClaim
-        - CtoTransfer
-        - CtoApplication
-      abis:
-        - name: BlitzrLocker
-          file: ./abis/BlitzrLocker.json
-      eventHandlers:
-        - event: PositionRegistered(indexed address,indexed uint256,address,address,address)
-          handler: handlePositionRegistered
-        - event: FeesClaimed(indexed address,indexed address,uint256,uint256,uint256,uint256)
-          handler: handleFeesClaimed
-        - event: FeesBurned(indexed address,uint256,uint256)
-          handler: handleFeesBurned
-        - event: BurnToggled(indexed address,bool)
-          handler: handleBurnToggled
-        - event: TokenCTO(indexed address,indexed address,indexed address)
-          handler: handleTokenCTO
-        - event: CTOApplied(indexed address,indexed address,address,uint256)
-          handler: handleCTOApplied
+        - event: LauncherSet(indexed address,bool)
+          handler: handleLauncherSet
       file: ./src/locker.ts
 
   # ── BlitzrBondingCurveArc — token factory + internal AMM + migration engine ─────────────────
@@ -136,7 +106,7 @@ dataSources:
     name: BlitzrBondingCurveArc
     network: arc
     source:
-      address: "0x0000000000000000000000000000000000000004"
+      address: "0x0000000000000000000000000000000000000003"
       abi: BlitzrBondingCurveArc
       startBlock: 0
     mapping:
