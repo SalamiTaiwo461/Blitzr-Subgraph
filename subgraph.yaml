@@ -1,0 +1,260 @@
+specVersion: 1.0.0
+description: >
+  Blitzr — Arc-network deployment of BlitzrDotFunCore (https://github.com/justOneLad/BlitzrDotFunCore).
+  Indexes BlitzrLauncherArc (V3-style one-sided-liquidity launches) and BlitzrBondingCurveArc
+  (internal bonding curve -> DEX migration), including the underlying V3 pools / V2 pairs those
+  stacks create. xBlitzr (Uniswap V4) has no Arc variant and is out of scope.
+schema:
+  file: ./schema.graphql
+
+# ---------------------------------------------------------------------------------------------
+# All addresses/startBlocks below are placeholders (0x000...00N / 0) — BlitzrDotFunCore has not
+# been deployed to Arc yet as of writing. Fill these in from the actual deployment transactions
+# (see script/DeployV3.s.sol's Arc equivalent) before running `graph deploy`. `network: arc` is
+# also a placeholder — set it to whatever network name your graph-node instance (or Subgraph
+# Studio / the hosted indexer you're using) registers Arc under.
+# ---------------------------------------------------------------------------------------------
+
+dataSources:
+  # ── BlitzrLauncherArc — V3-style launcher, one-sided permanent liquidity ────────────────────
+  - kind: ethereum/contract
+    name: BlitzrLauncherArc
+    network: arc
+    source:
+      address: "0x0000000000000000000000000000000000000001"
+      abi: BlitzrLauncherArc
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Token
+        - Pool
+        - Protocol
+        - DexRegistryEntry
+        - QuoteTokenConfig
+      abis:
+        - name: BlitzrLauncherArc
+          file: ./abis/BlitzrLauncherArc.json
+        - name: BlitzrToken
+          file: ./abis/BlitzrToken.json
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+      eventHandlers:
+        - event: TokenLaunched(indexed address,indexed address,indexed address,address,address,address,uint256)
+          handler: handleTokenLaunched
+        - event: DexAdded(indexed address,address,address)
+          handler: handleDexAdded
+        - event: DexDisabled(indexed address)
+          handler: handleDexDisabled
+        - event: QuoteTokenAdded(indexed address,uint256,uint24)
+          handler: handleQuoteTokenAdded
+        - event: QuoteTokenDisabled(indexed address)
+          handler: handleQuoteTokenDisabled
+        - event: MarketCapRefSet(indexed address,uint256)
+          handler: handleMarketCapRefSet
+      file: ./src/launcher-arc.ts
+
+  # ── BlitzrLocker — V3-stack instance (locks BlitzrLauncherArc's LP positions) ───────────────
+  - kind: ethereum/contract
+    name: BlitzrLockerV3
+    network: arc
+    source:
+      address: "0x0000000000000000000000000000000000000002"
+      abi: BlitzrLocker
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - LockerPosition
+        - FeeClaim
+        - CtoTransfer
+        - CtoApplication
+      abis:
+        - name: BlitzrLocker
+          file: ./abis/BlitzrLocker.json
+      eventHandlers:
+        - event: PositionRegistered(indexed address,indexed uint256,address,address,address)
+          handler: handlePositionRegistered
+        - event: FeesClaimed(indexed address,indexed address,uint256,uint256,uint256,uint256)
+          handler: handleFeesClaimed
+        - event: FeesBurned(indexed address,uint256,uint256)
+          handler: handleFeesBurned
+        - event: BurnToggled(indexed address,bool)
+          handler: handleBurnToggled
+        - event: TokenCTO(indexed address,indexed address,indexed address)
+          handler: handleTokenCTO
+        - event: CTOApplied(indexed address,indexed address,address,uint256)
+          handler: handleCTOApplied
+      file: ./src/locker.ts
+
+  # ── BlitzrLocker — bonding-curve-stack instance (locks BlitzrStandardToken migrations) ──────
+  # Same contract type as BlitzrLockerV3 above, deployed as a SEPARATE instance — BlitzrLocker's
+  # `launcher` is a single address and cannot be shared between the two stacks at once (see
+  # BONDING_CURVE.md -> "Deployment Order"). Reuses the identical mapping file; handlers key off
+  # event.address for the `locker` field and off the linked Token's `stack` for CTO attribution,
+  # so no stack-specific branching is hardcoded here.
+  - kind: ethereum/contract
+    name: BlitzrLockerBondingCurve
+    network: arc
+    source:
+      address: "0x0000000000000000000000000000000000000003"
+      abi: BlitzrLocker
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - LockerPosition
+        - FeeClaim
+        - CtoTransfer
+        - CtoApplication
+      abis:
+        - name: BlitzrLocker
+          file: ./abis/BlitzrLocker.json
+      eventHandlers:
+        - event: PositionRegistered(indexed address,indexed uint256,address,address,address)
+          handler: handlePositionRegistered
+        - event: FeesClaimed(indexed address,indexed address,uint256,uint256,uint256,uint256)
+          handler: handleFeesClaimed
+        - event: FeesBurned(indexed address,uint256,uint256)
+          handler: handleFeesBurned
+        - event: BurnToggled(indexed address,bool)
+          handler: handleBurnToggled
+        - event: TokenCTO(indexed address,indexed address,indexed address)
+          handler: handleTokenCTO
+        - event: CTOApplied(indexed address,indexed address,address,uint256)
+          handler: handleCTOApplied
+      file: ./src/locker.ts
+
+  # ── BlitzrBondingCurveArc — token factory + internal AMM + migration engine ─────────────────
+  - kind: ethereum/contract
+    name: BlitzrBondingCurveArc
+    network: arc
+    source:
+      address: "0x0000000000000000000000000000000000000004"
+      abi: BlitzrBondingCurveArc
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Token
+        - Pool
+        - BondingCurve
+        - BondingTrade
+        - Migration
+        - Protocol
+      abis:
+        - name: BlitzrBondingCurveArc
+          file: ./abis/BlitzrBondingCurveArc.json
+        - name: BlitzrToken
+          file: ./abis/BlitzrToken.json
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+        - name: UniswapV2Pair
+          file: ./abis/UniswapV2Pair.json
+      eventHandlers:
+        - event: TokenCreated(indexed address,indexed address,uint256,uint256,uint256,bool,uint256)
+          handler: handleTokenCreated
+        - event: TokenRegistered(indexed address,indexed address,uint256,uint256,uint256)
+          handler: handleTokenRegistered
+        - event: TokenBought(indexed address,indexed address,uint256,uint256,uint256,uint256)
+          handler: handleTokenBought
+        - event: TokenSold(indexed address,indexed address,uint256,uint256,uint256)
+          handler: handleTokenSold
+        - event: TokenMigrated(indexed address,indexed address,uint256,uint256)
+          handler: handleTokenMigrated
+        - event: EmergencyMigrated(indexed address,indexed address,uint256,uint256)
+          handler: handleEmergencyMigrated
+        - event: MigrationFailed(indexed address)
+          handler: handleMigrationFailed
+      file: ./src/bonding-curve-arc.ts
+
+templates:
+  # ── V3 pool backing a BLITZR_V3 launch or a migrated BONDING_STANDARD token ─────────────────
+  - kind: ethereum/contract
+    name: UniswapV3Pool
+    network: arc
+    source:
+      abi: UniswapV3Pool
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Pool
+        - Swap
+        - LiquidityEvent
+        - PoolDayData
+      abis:
+        - name: UniswapV3Pool
+          file: ./abis/UniswapV3Pool.json
+      eventHandlers:
+        - event: Initialize(uint160,int24)
+          handler: handleInitialize
+        - event: Swap(indexed address,indexed address,int256,int256,uint160,uint128,int24)
+          handler: handleSwap
+        - event: Mint(address,indexed address,indexed int24,indexed int24,uint128,uint256,uint256)
+          handler: handleMint
+        - event: Burn(indexed address,indexed int24,indexed int24,uint128,uint256,uint256)
+          handler: handleBurn
+      file: ./src/v3-pool.ts
+
+  # ── V2 pair backing a migrated BONDING_TAX token ────────────────────────────────────────────
+  - kind: ethereum/contract
+    name: UniswapV2Pair
+    network: arc
+    source:
+      abi: UniswapV2Pair
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Pool
+        - Swap
+        - LiquidityEvent
+        - PoolDayData
+      abis:
+        - name: UniswapV2Pair
+          file: ./abis/UniswapV2Pair.json
+      eventHandlers:
+        - event: Swap(indexed address,uint256,uint256,uint256,uint256,indexed address)
+          handler: handleSwap
+        - event: Mint(indexed address,uint256,uint256)
+          handler: handleMint
+        - event: Burn(indexed address,uint256,uint256,indexed address)
+          handler: handleBurn
+        - event: Sync(uint112,uint112)
+          handler: handleSync
+      file: ./src/v2-pair.ts
+
+  # ── BlitzrTaxTokenArc clone — tax/reflection mechanics, no V3/V2 equivalent ─────────────────
+  - kind: ethereum/contract
+    name: BlitzrTaxTokenArc
+    network: arc
+    source:
+      abi: BlitzrTaxTokenArc
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - TaxTokenInfo
+      abis:
+        - name: BlitzrTaxTokenArc
+          file: ./abis/BlitzrTaxTokenArc.json
+      eventHandlers:
+        - event: SwapAndLiquify(uint256,uint256)
+          handler: handleSwapAndLiquify
+        - event: ReflectionSwapped(indexed address,uint256,uint256)
+          handler: handleReflectionSwapped
+        - event: ReflectionDistributed(indexed address,uint256,uint256)
+          handler: handleReflectionDistributed
+      file: ./src/tax-token-arc.ts

@@ -1,0 +1,116 @@
+[
+  {
+    "type": "event",
+    "name": "TokenLaunched",
+    "anonymous": false,
+    "inputs": [
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "creator", "type": "address", "indexed": true },
+      { "name": "factory", "type": "address", "indexed": true },
+      { "name": "quoteToken", "type": "address", "indexed": false },
+      { "name": "feeWallet", "type": "address", "indexed": false },
+      { "name": "pool", "type": "address", "indexed": false },
+      { "name": "tokenId", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "DexAdded",
+    "anonymous": false,
+    "inputs": [
+      { "name": "factory", "type": "address", "indexed": true },
+      { "name": "positionManager", "type": "address", "indexed": false },
+      { "name": "router", "type": "address", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "DexDisabled",
+    "anonymous": false,
+    "inputs": [{ "name": "factory", "type": "address", "indexed": true }]
+  },
+  {
+    "type": "event",
+    "name": "QuoteTokenAdded",
+    "anonymous": false,
+    "inputs": [
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "marketCapRef", "type": "uint256", "indexed": false },
+      { "name": "nativePairFee", "type": "uint24", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "QuoteTokenDisabled",
+    "anonymous": false,
+    "inputs": [{ "name": "token", "type": "address", "indexed": true }]
+  },
+  {
+    "type": "event",
+    "name": "LaunchFeeWalletSet",
+    "anonymous": false,
+    "inputs": [{ "name": "wallet", "type": "address", "indexed": true }]
+  },
+  {
+    "type": "event",
+    "name": "LaunchFeeSet",
+    "anonymous": false,
+    "inputs": [{ "name": "fee", "type": "uint256", "indexed": false }]
+  },
+  {
+    "type": "event",
+    "name": "AntiBotBlocksSet",
+    "anonymous": false,
+    "inputs": [{ "name": "blocks", "type": "uint256", "indexed": false }]
+  },
+  {
+    "type": "event",
+    "name": "MarketCapRefSet",
+    "anonymous": false,
+    "inputs": [
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "marketCapRef", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ETHRescued",
+    "anonymous": false,
+    "inputs": [
+      { "name": "to", "type": "address", "indexed": true },
+      { "name": "amount", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ERC20Rescued",
+    "anonymous": false,
+    "inputs": [
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "to", "type": "address", "indexed": true },
+      { "name": "amount", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "dexes",
+    "stateMutability": "view",
+    "inputs": [{ "name": "", "type": "address" }],
+    "outputs": [
+      { "name": "positionManager", "type": "address" },
+      { "name": "router", "type": "address" },
+      { "name": "enabled", "type": "bool" }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "quoteTokens",
+    "stateMutability": "view",
+    "inputs": [{ "name": "", "type": "address" }],
+    "outputs": [
+      { "name": "marketCapRef", "type": "uint256" },
+      { "name": "nativePairFee", "type": "uint24" },
+      { "name": "enabled", "type": "bool" }
+    ]
+  }
+]

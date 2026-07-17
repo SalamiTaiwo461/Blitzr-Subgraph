@@ -1,0 +1,377 @@
+"""
+Scope: this subgraph indexes the Arc-network deployment of BlitzrDotFunCore only
+(https://github.com/justOneLad/BlitzrDotFunCore). Arc's native gas token IS USDC (6 decimals,
+fixed address 0x3600000000000000000000000000000000000000) — there is no WETH on Arc. xBlitzr
+(the Uniswap V4 hook stack) has no Arc variant and is intentionally not indexed here.
+
+Two parallel launch stacks feed into real DEX pools/pairs on Arc:
+  - BlitzrLauncherArc     (contracts/BlitzrLauncherArc.sol)      -> V3 pool, one-sided, locked in BlitzrLocker
+  - BlitzrBondingCurveArc (bonding-curve/BlitzrBondingCurveArc.sol) -> internal curve, migrates to:
+      - BlitzrStandardToken -> V3 pool, locked in BlitzrLocker (a *separate* BlitzrLocker instance)
+      - BlitzrTaxTokenArc   -> V2 pair, LP burned
+"""
+
+enum LaunchStack {
+  BLITZR_V3 # BlitzrLauncherArc
+  BONDING_STANDARD # BlitzrBondingCurveArc -> BlitzrStandardToken (migrates to V3)
+  BONDING_TAX # BlitzrBondingCurveArc -> BlitzrTaxTokenArc (migrates to V2, LP burned)
+}
+
+enum PoolType {
+  UNISWAP_V3
+  UNISWAP_V2
+}
+
+enum TradeSide {
+  BUY
+  SELL
+}
+
+enum LiquiditySide {
+  MINT
+  BURN
+}
+
+"""
+Singleton, id "1". Chain-wide protocol counters, cheap to read for dashboards.
+"""
+type Protocol @entity {
+  id: Bytes!
+  tokensLaunchedV3: BigInt!
+  tokensLaunchedBondingStandard: BigInt!
+  tokensLaunchedBondingTax: BigInt!
+  poolsCreated: BigInt!
+  totalDexSwaps: BigInt!
+  totalBondingTrades: BigInt!
+  totalMigrations: BigInt!
+  totalEmergencyMigrations: BigInt!
+}
+
+"""
+One launched token, regardless of which of the two stacks created it.
+id = token contract address.
+"""
+type Token @entity {
+  id: Bytes!
+  stack: LaunchStack!
+  name: String!
+  symbol: String!
+  decimals: Int!
+  totalSupply: BigInt!
+  creator: Bytes!
+  feeWallet: Bytes
+  metaURI: String
+
+  # BLITZR_V3 only: the token used as the pool's other leg (usually ARC_USDC, but any
+  # registered quote token). Bonding-curve tokens always raise in native ARC_USDC directly.
+  quoteToken: Bytes
+
+  # Set once the DEX pool/pair backing this token is known. For BLITZR_V3 this is emitted in the
+  # same TokenLaunched event as the launch itself. For the bonding-curve stacks the pair/pool is
+  # created inside createToken()/createTT() itself (see BONDING_CURVE.md -> "Pool Creation"), so
+  # it is also known from block one, well before migration.
+  pool: Pool
+
+  # BLITZR_V3 and BONDING_STANDARD (post-migration) route their locked LP position and ongoing
+  # swap-fee split through a shared BlitzrLocker instance (a *separate* instance per stack).
+  lockerPosition: LockerPosition
+
+  # BONDING_STANDARD / BONDING_TAX only.
+  bondingCurve: BondingCurve
+
+  # Anti-bot state, mirrored from BlitzrToken/BlitzrStandardToken/BlitzrTaxTokenArc.
+  antiBotEndBlock: BigInt
+  exemptCount: Int!
+
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+  createdAtTx: Bytes!
+
+  ctoEvents: [CtoTransfer!]! @derivedFrom(field: "token")
+  ctoApplications: [CtoApplication!]! @derivedFrom(field: "token")
+}
+
+"""
+A DEX pool or pair backing exactly one launched Token.
+id = the pool/pair contract address (both V3 pools and V2 pairs are individually deployed
+contracts on Arc, unlike Uniswap V4's singleton PoolManager which is out of scope here).
+"""
+type Pool @entity {
+  id: Bytes!
+  type: PoolType!
+  token: Token!
+
+  # token0/token1 by address sort order, as the underlying DEX defines it. launchedTokenIsToken0
+  # records which leg is the Blitzr-launched token, since V3 address-sort ordering varies per
+  # launch (see BLITZR.md -> "Per-token burn").
+  token0: Bytes!
+  token1: Bytes!
+  launchedTokenIsToken0: Boolean!
+
+  feeTier: Int # V3 only, hundredths of a bip (10000 = 1%)
+  factory: Bytes
+  positionManager: Bytes # V3 only: NFT position manager holding/locking the position
+
+  createdAtBlock: BigInt!
+  createdAtTimestamp: BigInt!
+  createdAtTx: Bytes!
+
+  # Live state, updated on every Swap/Mint/Burn/Initialize.
+  sqrtPriceX96: BigInt # V3 only
+  tick: Int # V3 only
+  liquidity: BigInt # V3 only, in-range liquidity
+  reserve0: BigInt # V2 only
+  reserve1: BigInt # V2 only
+  token0Price: BigDecimal! # token1 per token0
+  token1Price: BigDecimal! # token0 per token1
+
+  # Cumulative, in raw token units converted to decimals using each side's own decimals.
+  volumeToken0: BigDecimal!
+  volumeToken1: BigDecimal!
+  txCount: BigInt!
+
+  swaps: [Swap!]! @derivedFrom(field: "pool")
+  liquidityEvents: [LiquidityEvent!]! @derivedFrom(field: "pool")
+}
+
+"""
+A single swap against a Pool, normalized across V3/V2. id = txHash-logIndex.
+"""
+type Swap @entity(immutable: true) {
+  id: Bytes!
+  pool: Pool!
+  type: PoolType!
+  sender: Bytes!
+  recipient: Bytes # V2 `to` / V3 `recipient`
+  # Signed deltas from the perspective of the pool (V3 convention: positive = pool received,
+  # negative = pool paid out); V2 amounts are normalized to the same signed convention on
+  # ingestion (amountIn positive, amountOut negative, per side).
+  amount0: BigInt!
+  amount1: BigInt!
+  sqrtPriceX96: BigInt # V3 only
+  tick: Int # V3 only
+  liquidity: BigInt # V3 only, pool liquidity after the swap
+  timestamp: BigInt!
+  block: BigInt!
+  tx: Bytes!
+  logIndex: BigInt!
+}
+
+"""
+A liquidity-side event on a Pool: Mint/Burn. Every Blitzr V3 pool's *principal* position is
+meant to be permanent — see BLITZR.md "permanent one-sided liquidity" — so in steady state the
+only V3 entries here after launch/migration should be zero-delta "pokes" (fee realization via
+BlitzrLocker.claimFees). Recorded generically anyway so any deviation is visible on-chain rather
+than assumed away. V2 pairs (BlitzrTaxTokenArc) mint exactly once at migration and burn never
+(LP tokens are sent to the dead address, not burned via the pair's own Burn event).
+"""
+type LiquidityEvent @entity(immutable: true) {
+  id: Bytes!
+  pool: Pool!
+  side: LiquiditySide!
+  sender: Bytes
+  owner: Bytes
+  to: Bytes # V2 Mint/Burn recipient
+  tickLower: Int # V3 only
+  tickUpper: Int # V3 only
+  amount: BigInt # V3 liquidity units
+  amount0: BigInt!
+  amount1: BigInt!
+  timestamp: BigInt!
+  block: BigInt!
+  tx: Bytes!
+  logIndex: BigInt!
+}
+
+"""
+BONDING_STANDARD / BONDING_TAX only: the internal constant-product curve a token trades on
+before migrating to a real DEX. id = token address. Field names mirror BlitzrBondingCurveArc's
+own USDC-denominated naming (virtualUSDC/raisedUSDC), not the BSC contract's BNB-named fields.
+"""
+type BondingCurve @entity {
+  id: Bytes!
+  token: Token!
+  creator: Bytes!
+
+  totalSupply: BigInt!
+  liquidityTokens: BigInt!
+  bcTokensTotal: BigInt!
+  bcTokensSold: BigInt!
+
+  virtualUSDC: BigInt!
+  k: BigInt!
+  raisedUSDC: BigInt!
+  migrationTarget: BigInt!
+
+  # The DEX pool/pair this curve migrates into — created at createToken()/createTT() time
+  # already (see BONDING_CURVE.md -> "Pool Creation"), not deferred to migration.
+  pool: Pool
+  useV3: Boolean!
+  router: Bytes!
+  v3PositionManager: Bytes
+
+  antibotEnabled: Boolean!
+  creationBlock: BigInt!
+  tradingBlock: BigInt!
+
+  migrated: Boolean!
+  migrationPending: Boolean!
+
+  buyCount: BigInt!
+  sellCount: BigInt!
+
+  trades: [BondingTrade!]! @derivedFrom(field: "bondingCurve")
+  migration: Migration
+
+  # BONDING_TAX only.
+  taxInfo: TaxTokenInfo
+}
+
+"""
+A single buy/sell against a BondingCurve. id = txHash-logIndex.
+"""
+type BondingTrade @entity(immutable: true) {
+  id: Bytes!
+  bondingCurve: BondingCurve!
+  token: Token!
+  trader: Bytes!
+  side: TradeSide!
+  usdcAmount: BigInt!
+  tokenAmount: BigInt!
+  tokensToDead: BigInt! # antibot decay burn, buy-side only (0 for sells)
+  raisedUSDCAfter: BigInt!
+  priceUSDCPerToken: BigDecimal!
+  timestamp: BigInt!
+  block: BigInt!
+  tx: Bytes!
+  logIndex: BigInt!
+}
+
+"""
+A completed (or emergency) migration from the bonding curve to its DEX pool. id = token address.
+"""
+type Migration @entity(immutable: true) {
+  id: Bytes!
+  token: Token!
+  pool: Pool
+  liquidityUSDC: BigInt!
+  liquidityTokens: BigInt!
+  emergency: Boolean!
+  emergencyTo: Bytes
+  timestamp: BigInt!
+  block: BigInt!
+  tx: Bytes!
+}
+
+"""
+BONDING_TAX only: buy/sell tax mechanics that have no V3 equivalent. id = token address.
+"""
+type TaxTokenInfo @entity {
+  id: Bytes!
+  token: Token!
+  swapAndLiquifyCount: BigInt!
+  totalTokensSwappedForLiquidity: BigInt!
+  totalUsdcAddedToLiquidity: BigInt!
+  reflectionSwapCount: BigInt!
+  reflectionDistributionCount: BigInt!
+  totalReflectionRecipients: BigInt!
+}
+
+"""
+BLITZR_V3 and BONDING_STANDARD (post-migration): the permanently-locked LP-NFT position held by
+a BlitzrLocker instance, and the cumulative result of every claimFees() call against it.
+id = launched token address.
+"""
+type LockerPosition @entity {
+  id: Bytes!
+  token: Token!
+  locker: Bytes! # BlitzrLocker contract address for this position (V3 stack and bonding-curve stack use separate instances)
+  tokenId: BigInt!
+  feeWallet: Bytes!
+  pool: Bytes!
+  positionManager: Bytes!
+  burnEnabled: Boolean!
+  cumulativeCreator0: BigInt!
+  cumulativeCreator1: BigInt!
+  cumulativePlatform0: BigInt!
+  cumulativePlatform1: BigInt!
+  cumulativeBurned0: BigInt!
+  cumulativeBurned1: BigInt!
+  claims: [FeeClaim!]! @derivedFrom(field: "position")
+}
+
+type FeeClaim @entity(immutable: true) {
+  id: Bytes!
+  position: LockerPosition!
+  feeWallet: Bytes!
+  creator0: BigInt!
+  creator1: BigInt!
+  platform0: BigInt!
+  platform1: BigInt!
+  timestamp: BigInt!
+  block: BigInt!
+  tx: Bytes!
+}
+
+"""
+A CTO (change-the-owner / fee-wallet reassignment) taking effect on a BlitzrLocker position.
+"""
+type CtoTransfer @entity(immutable: true) {
+  id: Bytes!
+  token: Token!
+  source: LaunchStack!
+  oldFeeWallet: Bytes!
+  newFeeWallet: Bytes!
+  timestamp: BigInt!
+  block: BigInt!
+  tx: Bytes!
+}
+
+type CtoApplication @entity(immutable: true) {
+  id: Bytes!
+  token: Token!
+  source: LaunchStack!
+  applicant: Bytes!
+  proposedFeeWallet: Bytes!
+  feePaid: BigInt!
+  timestamp: BigInt!
+  block: BigInt!
+  tx: Bytes!
+}
+
+"""
+Registry entities, mirrored from owner-only config calls. Small, low-churn, useful for context
+(e.g. resolving a launch's marketCapRef without a contract call).
+"""
+type DexRegistryEntry @entity {
+  id: Bytes! # factory address
+  positionManager: Bytes!
+  router: Bytes!
+  enabled: Boolean!
+}
+
+type QuoteTokenConfig @entity {
+  id: Bytes! # quote token address (BlitzrLauncherArc keeps a single registry)
+  token: Bytes!
+  marketCapRef: BigInt!
+  nativePairFee: Int # fee tier of the existing ARC_USDC/token pool, used for multihop instant-buy routing
+  enabled: Boolean!
+}
+
+"""
+Daily rollup per Pool, id = "<poolAddress>-<dayId>". Kept intentionally simple (no USD pricing —
+this protocol has no oracle dependency on Arc by design, see BONDING_CURVE.md "Arc Variant").
+"""
+type PoolDayData @entity {
+  id: Bytes!
+  pool: Pool!
+  date: Int! # unix day index (timestamp / 86400)
+  token0Price: BigDecimal!
+  token1Price: BigDecimal!
+  volumeToken0: BigDecimal!
+  volumeToken1: BigDecimal!
+  txCount: BigInt!
+  liquidity: BigInt
+  reserve0: BigInt
+  reserve1: BigInt
+}

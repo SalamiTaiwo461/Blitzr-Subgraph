@@ -1,0 +1,40 @@
+[
+  {
+    "type": "event",
+    "name": "SwapAndLiquify",
+    "anonymous": false,
+    "inputs": [
+      { "name": "tokensSwapped", "type": "uint256", "indexed": false },
+      { "name": "bnb", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "DexConfigured",
+    "anonymous": false,
+    "inputs": [
+      { "name": "pair", "type": "address", "indexed": false },
+      { "name": "router", "type": "address", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ReflectionSwapped",
+    "anonymous": false,
+    "inputs": [
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "tokensSpent", "type": "uint256", "indexed": false },
+      { "name": "received", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ReflectionDistributed",
+    "anonymous": false,
+    "inputs": [
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "amount", "type": "uint256", "indexed": false },
+      { "name": "recipients", "type": "uint256", "indexed": false }
+    ]
+  }
+]

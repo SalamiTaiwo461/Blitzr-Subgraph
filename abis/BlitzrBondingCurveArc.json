@@ -1,0 +1,144 @@
+[
+  {
+    "type": "event",
+    "name": "TokenCreated",
+    "anonymous": false,
+    "inputs": [
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "creator", "type": "address", "indexed": true },
+      { "name": "totalSupply", "type": "uint256", "indexed": false },
+      { "name": "virtualUSDC", "type": "uint256", "indexed": false },
+      { "name": "migrationTarget", "type": "uint256", "indexed": false },
+      { "name": "antibotEnabled", "type": "bool", "indexed": false },
+      { "name": "tradingBlock", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "TokenRegistered",
+    "anonymous": false,
+    "inputs": [
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "creator", "type": "address", "indexed": true },
+      { "name": "totalSupply", "type": "uint256", "indexed": false },
+      { "name": "virtualUSDC", "type": "uint256", "indexed": false },
+      { "name": "migrationTarget", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "TokenBought",
+    "anonymous": false,
+    "inputs": [
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "buyer", "type": "address", "indexed": true },
+      { "name": "usdcIn", "type": "uint256", "indexed": false },
+      { "name": "tokensOut", "type": "uint256", "indexed": false },
+      { "name": "tokensToDead", "type": "uint256", "indexed": false },
+      { "name": "raisedUSDC", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "TokenSold",
+    "anonymous": false,
+    "inputs": [
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "seller", "type": "address", "indexed": true },
+      { "name": "tokensIn", "type": "uint256", "indexed": false },
+      { "name": "usdcOut", "type": "uint256", "indexed": false },
+      { "name": "raisedUSDC", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "TokenMigrated",
+    "anonymous": false,
+    "inputs": [
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "pair", "type": "address", "indexed": true },
+      { "name": "liquidityUSDC", "type": "uint256", "indexed": false },
+      { "name": "liquidityTokens", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "EmergencyMigrated",
+    "anonymous": false,
+    "inputs": [
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "to", "type": "address", "indexed": true },
+      { "name": "usdcAmount", "type": "uint256", "indexed": false },
+      { "name": "tokenAmount", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "MigrationFailed",
+    "anonymous": false,
+    "inputs": [{ "name": "token", "type": "address", "indexed": true }]
+  },
+  {
+    "type": "event",
+    "name": "ReflectionTokenAllowlisted",
+    "anonymous": false,
+    "inputs": [
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "allowed", "type": "bool", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "FeesUpdated",
+    "anonymous": false,
+    "inputs": [{ "name": "platformFee", "type": "uint256", "indexed": false }]
+  },
+  {
+    "type": "event",
+    "name": "FeeRecipientUpdated",
+    "anonymous": false,
+    "inputs": [{ "name": "recipient", "type": "address", "indexed": false }]
+  },
+  {
+    "type": "event",
+    "name": "LockerUpdated",
+    "anonymous": false,
+    "inputs": [
+      { "name": "prev", "type": "address", "indexed": true },
+      { "name": "next", "type": "address", "indexed": true }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "getToken",
+    "stateMutability": "view",
+    "inputs": [{ "name": "token_", "type": "address" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "components": [
+          { "name": "token", "type": "address" },
+          { "name": "creator", "type": "address" },
+          { "name": "totalSupply", "type": "uint256" },
+          { "name": "liquidityTokens", "type": "uint256" },
+          { "name": "bcTokensTotal", "type": "uint256" },
+          { "name": "bcTokensSold", "type": "uint256" },
+          { "name": "virtualUSDC", "type": "uint256" },
+          { "name": "k", "type": "uint256" },
+          { "name": "raisedUSDC", "type": "uint256" },
+          { "name": "migrationTarget", "type": "uint256" },
+          { "name": "pair", "type": "address" },
+          { "name": "router", "type": "address" },
+          { "name": "v3PositionManager", "type": "address" },
+          { "name": "antibotEnabled", "type": "bool" },
+          { "name": "creationBlock", "type": "uint256" },
+          { "name": "tradingBlock", "type": "uint256" },
+          { "name": "migrated", "type": "bool" },
+          { "name": "migrationPending", "type": "bool" },
+          { "name": "useV3", "type": "bool" }
+        ]
+      }
+    ]
+  }
+]

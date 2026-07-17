@@ -1,0 +1,51 @@
+[
+  {
+    "type": "event",
+    "name": "Transfer",
+    "anonymous": false,
+    "inputs": [
+      { "name": "from", "type": "address", "indexed": true },
+      { "name": "to", "type": "address", "indexed": true },
+      { "name": "value", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "Approval",
+    "anonymous": false,
+    "inputs": [
+      { "name": "owner", "type": "address", "indexed": true },
+      { "name": "spender", "type": "address", "indexed": true },
+      { "name": "value", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferred",
+    "anonymous": false,
+    "inputs": [
+      { "name": "previousOwner", "type": "address", "indexed": true },
+      { "name": "newOwner", "type": "address", "indexed": true }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "ExemptSet",
+    "anonymous": false,
+    "inputs": [
+      { "name": "account", "type": "address", "indexed": true },
+      { "name": "exempt", "type": "bool", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "MetaURISet",
+    "anonymous": false,
+    "inputs": [{ "name": "uri", "type": "string", "indexed": false }]
+  },
+  { "type": "function", "name": "name", "stateMutability": "view", "inputs": [], "outputs": [{ "name": "", "type": "string" }] },
+  { "type": "function", "name": "symbol", "stateMutability": "view", "inputs": [], "outputs": [{ "name": "", "type": "string" }] },
+  { "type": "function", "name": "decimals", "stateMutability": "pure", "inputs": [], "outputs": [{ "name": "", "type": "uint8" }] },
+  { "type": "function", "name": "totalSupply", "stateMutability": "view", "inputs": [], "outputs": [{ "name": "", "type": "uint256" }] },
+  { "type": "function", "name": "metaURI", "stateMutability": "view", "inputs": [], "outputs": [{ "name": "", "type": "string" }] }
+]

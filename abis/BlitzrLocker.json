@@ -1,0 +1,108 @@
+[
+  {
+    "type": "event",
+    "name": "PositionRegistered",
+    "anonymous": false,
+    "inputs": [
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "tokenId", "type": "uint256", "indexed": true },
+      { "name": "feeWallet", "type": "address", "indexed": false },
+      { "name": "pool", "type": "address", "indexed": false },
+      { "name": "positionManager", "type": "address", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "FeesClaimed",
+    "anonymous": false,
+    "inputs": [
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "feeWallet", "type": "address", "indexed": true },
+      { "name": "creator0", "type": "uint256", "indexed": false },
+      { "name": "creator1", "type": "uint256", "indexed": false },
+      { "name": "platform0", "type": "uint256", "indexed": false },
+      { "name": "platform1", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "FeesBurned",
+    "anonymous": false,
+    "inputs": [
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "amount0", "type": "uint256", "indexed": false },
+      { "name": "amount1", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "BurnToggled",
+    "anonymous": false,
+    "inputs": [
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "enabled", "type": "bool", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "LauncherSet",
+    "anonymous": false,
+    "inputs": [{ "name": "launcher", "type": "address", "indexed": true }]
+  },
+  {
+    "type": "event",
+    "name": "PlatformWalletSet",
+    "anonymous": false,
+    "inputs": [{ "name": "wallet", "type": "address", "indexed": true }]
+  },
+  {
+    "type": "event",
+    "name": "FeeBpsUpdated",
+    "anonymous": false,
+    "inputs": [
+      { "name": "creatorBps", "type": "uint256", "indexed": false },
+      { "name": "platformBps", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "TokenCTO",
+    "anonymous": false,
+    "inputs": [
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "oldFeeWallet", "type": "address", "indexed": true },
+      { "name": "newFeeWallet", "type": "address", "indexed": true }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "CTOApplied",
+    "anonymous": false,
+    "inputs": [
+      { "name": "token", "type": "address", "indexed": true },
+      { "name": "applicant", "type": "address", "indexed": true },
+      { "name": "proposedFeeWallet", "type": "address", "indexed": false },
+      { "name": "feePaid", "type": "uint256", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "CTOFeeSet",
+    "anonymous": false,
+    "inputs": [{ "name": "fee", "type": "uint256", "indexed": false }]
+  },
+  {
+    "type": "function",
+    "name": "positions",
+    "stateMutability": "view",
+    "inputs": [{ "name": "", "type": "address" }],
+    "outputs": [
+      { "name": "tokenId", "type": "uint256" },
+      { "name": "feeWallet", "type": "address" },
+      { "name": "token0", "type": "address" },
+      { "name": "token1", "type": "address" },
+      { "name": "pool", "type": "address" },
+      { "name": "positionManager", "type": "address" }
+    ]
+  }
+]
